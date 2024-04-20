@@ -1,11 +1,10 @@
 use std::{
+    error::Error,
     fs::File,
+    io::Read,
     num::NonZeroU8,
     path::PathBuf,
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc,
-    },
+    sync::mpsc::{channel, Receiver},
     thread,
     time::Duration,
 };
@@ -80,10 +79,12 @@ impl App for Main {
                     let file_path: PathBuf = self.conductor_path.clone().expect("Somehow");
                     let file_path_clone = file_path.clone();
                     let ctx = ctx.clone();
-                    thread::spawn(move || {
-                        let send = sender.send(Conductor::from_file(&file_path_clone));
+
+                    thread::spawn(move || -> Result<(), Box<dyn Error + Send + Sync>> {
+                        let conductor = Conductor::from_file(&file_path_clone)?;
+                        let send = sender.send(conductor);
                         ctx.request_repaint();
-                        send
+                        Ok(send?)
                     });
                 }
             } else {
@@ -128,16 +129,20 @@ pub struct Conductor {
 }
 
 impl Conductor {
-    pub fn from_file(file: &PathBuf) -> Self {
+    pub fn from_file(file: &PathBuf) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        let mut file = File::open(file)?;
+        let mut metadata_buffer: [u8; 3] = [0; 3];
+        file.read_exact(&mut metadata_buffer)?;
+        let [louie_swing, bpm, track_count] = metadata_buffer;
         // simulate work
         thread::sleep(Duration::from_secs(2));
         // TODO: actually parse the file
-        Self {
-            louie_swing: 0,
-            bpm: 120,
-            track_count: NonZeroU8::new(1).unwrap(),
+        Ok(Self {
+            louie_swing,
+            bpm,
+            track_count: NonZeroU8::new(track_count).unwrap(),
             tracks: Vec::new(),
-        }
+        })
     }
 }
 
