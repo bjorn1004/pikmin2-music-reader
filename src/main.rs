@@ -76,7 +76,13 @@ impl App for Main {
                         .num_columns(2)
                         .show(ui, |ui| {
                             ui.label("Louie swing:");
-                            ui.monospace(conductor.louie_swing.to_string());
+                            let timing_hint = match conductor.louie_swing {
+                                30 => "1/16th note",
+                                60 => "1/8th note",
+                                120 => "1/4th note",
+                                _ => "Custom",
+                            };
+                            ui.monospace(format!("{} ({})", conductor.louie_swing, timing_hint));
                             ui.end_row();
 
                             ui.label("Bpm:");
@@ -168,9 +174,9 @@ impl App for Main {
                         }
                     });
                 // No Conductor in memory, check if we're currently waiting on the parsing thread
-                } else if let Some(reciever) = &self.conductor_channel {
+                } else if let Some(receiver) = &self.conductor_channel {
                     // Check if the parsing is done
-                    if let Ok(conductor) = reciever.try_recv() {
+                    if let Ok(conductor) = receiver.try_recv() {
                         self.conductor = Some(conductor);
                     } else {
                         // Show loading text
@@ -181,8 +187,8 @@ impl App for Main {
                     }
                 } else {
                     // No thread active, spawn a parsing thread
-                    let (sender, reciever) = channel();
-                    self.conductor_channel = Some(reciever);
+                    let (sender, receiver) = channel();
+                    self.conductor_channel = Some(receiver);
                     let file_path: PathBuf = self.conductor_path.clone().expect("Somehow");
                     let file_path_clone = file_path.clone();
                     let ctx = ctx.clone();

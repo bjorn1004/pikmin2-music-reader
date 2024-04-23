@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     fs::File,
-    io::{BufReader, Read, Seek, SeekFrom},
+    io::{BufReader, Cursor, Read, Seek, SeekFrom},
     num::NonZeroU8,
     path::PathBuf,
 };
@@ -72,25 +72,26 @@ impl Track {
         byte_buffer: &[u8; 4 * 9],
         track_nr: u8,
     ) -> Result<Track, Box<dyn Error + Send + Sync>> {
-        let ([_, init_delay, b_offset_flag], remain) = byte_buffer.split_at(3) else {
-            return Err("Error parsing (1)".into());
-        };
-        // extract description
-        let (description_buffer, remain) = remain.split_at(8);
+        let mut cursor = Cursor::new(byte_buffer);
+
+        let mut buffer = [0; 3];
+        cursor.read_exact(&mut buffer)?;
+        let [_, init_delay, b_offset_flag] = buffer;
+
         let mut description: [u8; 8] = [0; 8];
-        description.copy_from_slice(description_buffer);
-        // extract track_copy and echo
-        let ([track_copy, echo], remain) = remain.split_at(2) else {
-            return Err("Error parsing (2)".into());
-        };
-        // seek 8 bytes forwards
-        let (_, remain) = remain.split_at(8);
-        // extract remainder
-        let [ordered, bank_byte, program, _, gesture_set, _, timing, gesture_count, silent_count, _, transposition, volume, panning, q_offset_flag, _] =
-            remain
-        else {
-            return Err("Error parsing (3)".into());
-        };
+        cursor.read_exact(&mut description)?;
+
+        let mut buffer = [0; 2];
+        cursor.read_exact(&mut buffer)?;
+        let [track_copy, echo] = buffer;
+
+        cursor.set_position(cursor.position() + 8);
+
+        let mut buffer = [0; 14];
+        cursor.read_exact(&mut buffer)?;
+        let [ordered, bank_byte, program, _, gesture_set, _, timing, gesture_count, silent_count, _, transposition, volume, panning, q_offset_flag] =
+            buffer;
+
         let bank = match bank_byte {
             0 => Ok(Bank::Pikmin1SFX),
             1 => Ok(Bank::WatanabeSFX),
@@ -100,38 +101,35 @@ impl Track {
             5 => Ok(Bank::TotakaInstruments),
             _ => Err(format!("Error parsing Bank for track {}", track_nr + 1)),
         }?;
+
         Ok(Self {
-            init_delay: *init_delay,
-            b_offset_flag: (*b_offset_flag == 1),
-            q_offset_flag: (*q_offset_flag == 1),
+            init_delay,
+            b_offset_flag: (b_offset_flag == 1),
+            q_offset_flag: (q_offset_flag == 1),
             description,
-            track_copy: *track_copy,
-            echo: *echo,
-            ordered: (*ordered == 1),
+            track_copy,
+            echo,
+            ordered: (ordered == 1),
             bank,
-            program: *program,
-            gesture_set: *gesture_set,
-            timing: *timing,
-            gesture_count: *gesture_count,
-            silent_count: *silent_count,
-            transposition: *transposition as i8,
-            volume: *volume,
-            panning: {
-                let panning_i8: i16 = 64_i16.wrapping_add((*panning).into());
-                panning_i8 as i8
-            },
+            program,
+            gesture_set,
+            timing,
+            gesture_count,
+            silent_count,
+            transposition: transposition as i8,
+            volume,
+            panning: (panning as i8) - 64,
         })
     }
 
     pub fn description(&self) -> &str {
-        // 205 is apparently the terminating character
-        let terminated_string = &self
-            .description
-            .split(|n| *n == 205)
-            .next()
-            // if this happens, it means the Description is invalid
-            .unwrap_or(&[205]);
-        std::str::from_utf8(terminated_string).unwrap_or("!!Description string is corrupted!!")
+        let error_message = "!!Description string is corrupted!!";
+        let terminated_string = self.description.split(|n| *n == 205).next();
+
+        match terminated_string {
+            Some(bytes) => std::str::from_utf8(bytes).unwrap_or(error_message),
+            None => error_message,
+        }
     }
 }
 
