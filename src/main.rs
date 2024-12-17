@@ -98,7 +98,7 @@ impl App for Main {
                     ScrollArea::vertical().show(ui, |ui| {
                         for (track_id, track) in conductor.tracks.iter().enumerate() {
                             CollapsingHeader::new(track.description())
-                                .id_source(format!("{}_{track_id}", track.description()))
+                                .id_salt(format!("{}_{track_id}", track.description()))
                                 .show(ui, |ui| {
                                     Grid::new(format!("{}_grid", track.description()))
                                         .num_columns(2)
@@ -240,6 +240,6 @@ fn main() -> Result<(), eframe::Error> {
     run_native(
         "Pikmin2MusicReader",
         native_options,
-        Box::new(|cc| Box::new(Main::new(cc))),
+        Box::new(|cc| Ok(Box::new(Main::new(cc)))),
     )
 }

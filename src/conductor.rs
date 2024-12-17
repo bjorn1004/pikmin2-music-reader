@@ -3,7 +3,7 @@ use std::{
     fs::File,
     io::{BufReader, Cursor, Read, Seek, SeekFrom},
     num::NonZeroU8,
-    path::PathBuf,
+    path::Path,
 };
 
 #[derive()]
@@ -15,7 +15,7 @@ pub struct Conductor {
 }
 
 impl Conductor {
-    pub fn from_file(file: &PathBuf) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    pub fn from_file(file: &Path) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let file = File::open(file)?;
         let mut reader = BufReader::new(file);
         let mut metadata_buffer: [u8; 3] = [0; 3];
