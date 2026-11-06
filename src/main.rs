@@ -11,7 +11,7 @@ use std::{
 use conductor::Bank;
 use conductor::Conductor;
 use eframe::{
-    egui::{CentralPanel, CollapsingHeader, Grid, ScrollArea},
+    egui::{CentralPanel, CollapsingHeader, Grid, ScrollArea, Ui},
     run_native, App,
 };
 
@@ -23,7 +23,7 @@ pub struct Main {
 }
 
 impl Main {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         Default::default()
     }
 
@@ -40,8 +40,8 @@ impl Main {
 }
 
 impl App for Main {
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
-        CentralPanel::default().show(ctx, |ui| {
+    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        CentralPanel::default().show(ui, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Pikmin 2 Music Reader");
             });
@@ -191,7 +191,7 @@ impl App for Main {
                     self.conductor_channel = Some(receiver);
                     let file_path: PathBuf = self.conductor_path.clone().expect("Somehow");
                     let file_path_clone = file_path.clone();
-                    let ctx = ctx.clone();
+                    let ctx = ui.ctx().clone();
 
                     thread::spawn(move || -> Result<(), Box<dyn Error + Send + Sync>> {
                         let conductor = match Conductor::from_file(&file_path_clone) {
@@ -220,12 +220,11 @@ impl App for Main {
     ) {
         // Check if user dropped file on screen
         if let Some(dropped_file) = _raw_input.dropped_files.first() {
-            println!("${:#?}", dropped_file);
+            // `DroppedFile` is a trait now: the path is read with a method, not a field
+            let path = dropped_file.path();
             // if it's a conductor file
-            if let Some(path) = &dropped_file.path {
-                if path.extension().unwrap() == "cnd" {
-                    self.set_conductor_path(dropped_file.path.clone());
-                }
+            if path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("cnd")) {
+                self.set_conductor_path(Some(path.to_path_buf()));
             }
         }
     }
